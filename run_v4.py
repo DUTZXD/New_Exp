@@ -12,10 +12,11 @@ import torchvision.transforms.functional as tf
 from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 from torchvision import utils as vutils
+from ssim import SSIM
 
 batch_size = 16
-epoches = 800
-lr = 0.0003
+epoches = 500
+lr = 0.0001
 
 
 # 定义残差块结构
@@ -42,13 +43,13 @@ class ResidualBlock(nn.Module):
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.layer0 = self.make_layer(3, 3, 7)
-        self.layer1 = self.make_layer(3, 3, 5)
-        self.layer2 = self.make_layer(3, 3, 3)
+        self.layer0 = self.make_layer(3, 3, 5)
+        self.layer1 = self.make_layer(3, 3, 3)
+        self.layer2 = self.make_layer(3, 3, 1)
         # self.smoothing0 = Gaussian.GaussianSmoothing(3, 7, 1.3)
         # self.smoothing1 = Gaussian.GaussianSmoothing(3, 5, 1.1)
         # self.smoothing2 = Gaussian.GaussianSmoothing(3, 3, 0.8)
-        self.gaussian = Gaussian.GaussianBlurConv()
+        # self.gaussian = Gaussian.GaussianBlurConv()
 
     def make_layer(self, inChannel, outChannel, kernel):
         layer = [ResidualBlock(inChannel, outChannel, kernel_size=kernel, stride=1, padding=int((kernel-1)/2)),
@@ -58,19 +59,19 @@ class Net(nn.Module):
 
     def forward(self, x):
         # 先进行高斯滤波及下采样
-        img0 = self.gaussian(x)
+        # img0 = self.gaussian(x)
         # img0 = self.smoothing0(x)
-        # img0 = kornia.gaussian_blur2d(x, (7, 7), (1.3, 1.3))
+        img0 = kornia.gaussian_blur2d(x, (5, 5), (1.1, 1.1))
 
         img1 = F.interpolate(img0, scale_factor=0.5)
-        img1 = self.gaussian(img1)
+        # img1 = self.gaussian(img1)
         # img1 = g_difference(img1, 5)
-        # img1 = kornia.gaussian_blur2d(img1, (5, 5), (1.1, 1.1))
+        img1 = kornia.gaussian_blur2d(img1, (3, 3), (0.8, 0.8))
 
         img2 = F.interpolate(img1, scale_factor=0.5)
-        img2 = self.gaussian(img2)
+        # img2 = self.gaussian(img2)
         # img2 = g_difference(img2, 3)
-        # img2 = kornia.gaussian_blur2d(img2, (3, 3), (0.8, 0.8))
+        img2 = kornia.gaussian_blur2d(img2, (1, 1), (0.5, 0.5))
 
         img0_log = -torch.log(img0 + 0.0001)
         img1_log = -torch.log(img1 + 0.0001)
@@ -141,6 +142,7 @@ def my_transform(input_img, label):
 def train(model, device, train_loader, optimizer, epoch):
     model.train()
     criterion1 = nn.MSELoss()
+    # criterion1 = SSIM()
     criterion2 = tv_loss.TVLoss()
     criterion3 = my_loss.MyLoss()
     running_loss = 0.0
@@ -195,7 +197,7 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=0.001)
     for epoch in range(epoches):
         train(model, device, train_loader, optimizer, epoch)
-    test(model, device, test_loader, 1)
+    # test(model, device, test_loader, 1)
 
 
 if __name__ == '__main__':
