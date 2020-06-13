@@ -13,6 +13,7 @@ from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 from torchvision import utils as vutils
 from ssim import SSIM
+from mydataset import MyData
 
 batch_size = 16
 epoches = 500
@@ -78,46 +79,13 @@ class Net(nn.Module):
         img2_log = -torch.log(img2 + 0.0001)
 
         x2 = -self.layer2(img2_log)
-        # save_image(-x2, './tmp2/x2.png')
         x1 = -self.layer1(img1_log)
-        # save_image(-x1, './tmp2/x1.png')
         x0 = -self.layer0(img0_log)
-        # save_image(-x0, './tmp2，/x0.png')
+
         x2 = F.interpolate(x2, size=[img0_log.shape[2], img0_log.shape[3]], mode='nearest')
         x1 = F.interpolate(x1, size=[img0_log.shape[2], img0_log.shape[3]], mode='nearest')
         illumination = x0 + x1 + x2
         return illumination
-
-
-# 自定义数据集
-class MyData(Dataset):
-    def __init__(self, txt_path, transform=None, target_transform=None):
-        fh = open(txt_path, 'r')
-        imgs = []
-        for line in fh:
-            line = line.strip('\n')
-            line = line.rstrip()
-            words = line.split('***', 1)
-            imgs.append((words[0], words[1]))
-        self.imgs = imgs
-        self.transform = transform
-        self.target_transform = target_transform
-        fh.close()
-
-    def __getitem__(self, index):
-        img, label = self.imgs[index]
-        img = Image.open(img).convert('RGB')
-        label = Image.open(label).convert('RGB')
-        img, label = my_transform(img, label)
-        img = transforms.ToPILImage()(img).convert('RGB')
-        label = transforms.ToPILImage()(label).convert('RGB')
-        if self.transform is not None:
-            img = self.transform(img)
-            label = self.transform(label)
-        return img, label
-
-    def __len__(self):
-        return len(self.imgs)
 
 
 # 保存结果
@@ -126,16 +94,6 @@ def save_image(input_tensor: torch.Tensor, filename):
     input_tensor = input_tensor.clone().detach()
     input_tensor = input_tensor.to(torch.device('cpu'))
     vutils.save_image(input_tensor, filename)
-
-
-# 同时对input,label做随机裁剪
-def my_transform(input_img, label):
-    i, j, h, w = transforms.RandomCrop.get_params(input_img, (64, 64))
-    image = tf.crop(input_img, i, j, h, w)
-    label = tf.crop(label, i, j, h, w)
-    image = tf.to_tensor(image)
-    label = tf.to_tensor(label)
-    return image, label
 
 
 # 训练
@@ -153,13 +111,13 @@ def train(model, device, train_loader, optimizer, epoch):
         illus = model(inputs)
         outputs = torch.exp(input_log - illus)
         loss = criterion1(outputs, labels) + criterion2(illus) + criterion3(outputs, labels)
-        running_loss += float(loss)
+        running_loss += loss.item()
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         print('batch_index:', batch_index, 'Epoch: %d Current train loss: %4f' % (epoch, running_loss/(batch_index+1)))
     torch.save(model.state_dict(), 'net_params5.pkl')
-    print('loss: ', float(running_loss))
+    print('loss: ', running_loss)
     with open('loss.txt', 'a') as f:
         f.write(str(running_loss) + "\n")
     print('第', epoch, '轮训练结束，网络参数更新')
@@ -186,7 +144,7 @@ def test(model, device, test_loader, epoch):
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = Net().to(device)
-    # model.load_state_dict(torch.load('net_params5.pkl'))
+    model.load_state_dict(torch.load('net_params5.pkl'))
 
     train_data = MyData('./train.txt', transform=transforms.Compose([transforms.ToTensor()]))
     train_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=True)
