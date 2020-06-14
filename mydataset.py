@@ -34,9 +34,9 @@ class MyData(Dataset):
         img, label = self.imgs[index]
         img = Image.open(img).convert('RGB')
         label = Image.open(label).convert('RGB')
-        img, label = my_transform(img, label)
-        img = transforms.ToPILImage()(img).convert('RGB')
-        label = transforms.ToPILImage()(label).convert('RGB')
+        # img, label = my_transform(img, label)
+        # img = transforms.ToPILImage()(img).convert('RGB')
+        # label = transforms.ToPILImage()(label).convert('RGB')
         if self.transform is not None:
             img = self.transform(img)
             label = self.transform(label)

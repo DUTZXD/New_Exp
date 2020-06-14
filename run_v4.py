@@ -16,8 +16,8 @@ from ssim import SSIM
 from mydataset import MyData
 
 batch_size = 16
-epoches = 500
-lr = 0.0001
+epoches = 1000
+lr = 0.001
 
 
 # 定义残差块结构
@@ -56,6 +56,10 @@ class Net(nn.Module):
         layer = [ResidualBlock(inChannel, outChannel, kernel_size=kernel, stride=1, padding=int((kernel-1)/2)),
                  ResidualBlock(outChannel, outChannel, kernel_size=kernel, stride=1, padding=int((kernel-1)/2)),
                  ResidualBlock(outChannel, outChannel, kernel_size=kernel, stride=1, padding=int((kernel-1)/2))]
+
+        # layer = [ResidualBlock(inChannel, outChannel, kernel_size=5, stride=1, padding=2),
+        #          ResidualBlock(outChannel, outChannel, kernel_size=3, stride=1, padding=1),
+        #          ResidualBlock(outChannel, outChannel, kernel_size=1, stride=1, padding=0)]
         return nn.Sequential(*layer)
 
     def forward(self, x):
@@ -111,12 +115,13 @@ def train(model, device, train_loader, optimizer, epoch):
         illus = model(inputs)
         outputs = torch.exp(input_log - illus)
         loss = criterion1(outputs, labels) + criterion2(illus) + criterion3(outputs, labels)
+        # loss = criterion1(outputs, labels) + criterion2(illus)
         running_loss += loss.item()
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         print('batch_index:', batch_index, 'Epoch: %d Current train loss: %4f' % (epoch, running_loss/(batch_index+1)))
-    torch.save(model.state_dict(), 'net_params5.pkl')
+    torch.save(model.state_dict(), 'net_paramstmp.pkl')
     print('loss: ', running_loss)
     with open('loss.txt', 'a') as f:
         f.write(str(running_loss) + "\n")
@@ -144,7 +149,7 @@ def test(model, device, test_loader, epoch):
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = Net().to(device)
-    model.load_state_dict(torch.load('net_params5.pkl'))
+    model.load_state_dict(torch.load('net_paramstmp.pkl'))
 
     train_data = MyData('./train.txt', transform=transforms.Compose([transforms.ToTensor()]))
     train_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=True)
@@ -152,10 +157,12 @@ def main():
     test_data = MyData('./test.txt', transform=transforms.Compose([transforms.ToTensor()]))
     test_loader = DataLoader(dataset=test_data, batch_size=1, shuffle=False)
 
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=0.001)
-    for epoch in range(epoches):
-        train(model, device, train_loader, optimizer, epoch)
-    # test(model, device, test_loader, 1)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    # optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    # optimizer = optim.RMSprop(model.parameters(), lr=lr, momentum=0.9)
+    # for epoch in range(epoches):
+    #     train(model, device, train_loader, optimizer, epoch)
+    test(model, device, test_loader, 1)
 
 
 if __name__ == '__main__':
