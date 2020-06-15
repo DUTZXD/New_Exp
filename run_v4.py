@@ -17,7 +17,7 @@ from mydataset import MyData
 
 batch_size = 16
 epoches = 1000
-lr = 0.001
+lr = 0.0001
 
 
 # 定义残差块结构
